@@ -1,0 +1,222 @@
+# ============================================================================
+# Auth0 Enterprise Platform - Docker Compose Configuration
+# ============================================================================
+# Local development environment
+# Usage: docker-compose up -d
+# ============================================================================
+
+version: '3.9'
+
+services:
+  # --------------------------------------------------------------------------
+  # PostgreSQL Database
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: auth0-enterprise-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: auth0_enterprise
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-localdev123}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth0_enterprise"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - auth0-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Redis Cache
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: auth0-enterprise-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - auth0-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Elasticsearch (Optional - for audit logs)
+  # --------------------------------------------------------------------------
+  # Uncomment the following section to enable Elasticsearch
+  # --------------------------------------------------------------------------
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+  #   container_name: auth0-enterprise-elasticsearch
+  #   restart: unless-stopped
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #     - xpack.security.enrollment.enabled=false
+  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+  #     - cluster.name=auth0-audit-cluster
+  #     - bootstrap.memory_lock=true
+  #   ulimits:
+  #     memlock:
+  #       soft: -1
+  #       hard: -1
+  #     nofile:
+  #       soft: 65536
+  #       hard: 65536
+  #   ports:
+  #     - "9200:9200"
+  #     - "9300:9300"
+  #   volumes:
+  #     - elasticsearch_data:/usr/share/elasticsearch/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 60s
+  #   networks:
+  #     - auth0-network
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Kibana (Optional - for Elasticsearch visualization)
+  # --------------------------------------------------------------------------
+  # Uncomment the following section to enable Kibana
+  # --------------------------------------------------------------------------
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:8.12.0
+  #   container_name: auth0-enterprise-kibana
+  #   restart: unless-stopped
+  #   environment:
+  #     - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+  #     - xpack.security.enabled=false
+  #   ports:
+  #     - "5601:5601"
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
+  #   networks:
+  #     - auth0-network
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Redis Commander (Optional - Redis GUI for development)
+  # --------------------------------------------------------------------------
+  # Uncomment the following section to enable Redis Commander
+  # --------------------------------------------------------------------------
+  # redis-commander:
+  #   image: rediscommander/redis-commander:latest
+  #   container_name: auth0-enterprise-redis-commander
+  #   restart: unless-stopped
+  #   environment:
+  #     - REDIS_HOSTS=local:redis:6379
+  #     - HTTP_USER=admin
+  #     - HTTP_PASSWORD=admin
+  #   ports:
+  #     - "8081:8081"
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - auth0-network
+
+  # --------------------------------------------------------------------------
+  # pgAdmin (Optional - PostgreSQL GUI for development)
+  # --------------------------------------------------------------------------
+  # Uncomment the following section to enable pgAdmin
+  # --------------------------------------------------------------------------
+  # pgadmin:
+  #   image: dpage/pgadmin4:latest
+  #   container_name: auth0-enterprise-pgadmin
+  #   restart: unless-stopped
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@admin.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin
+  #     PGADMIN_CONFIG_SERVER_MODE: 'False'
+  #   ports:
+  #     - "5050:80"
+  #   volumes:
+  #     - pgadmin_data:/var/lib/pgadmin
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - auth0-network
+
+  # --------------------------------------------------------------------------
+  # Mailhog (Optional - Email testing for development)
+  # --------------------------------------------------------------------------
+  # Uncomment the following section to enable Mailhog
+  # --------------------------------------------------------------------------
+  # mailhog:
+  #   image: mailhog/mailhog:latest
+  #   container_name: auth0-enterprise-mailhog
+  #   restart: unless-stopped
+  #   ports:
+  #     - "1025:1025"   # SMTP server
+  #     - "8025:8025"   # Web UI
+  #   networks:
+  #     - auth0-network
+
+# ----------------------------------------------------------------------------
+# Networks
+# ----------------------------------------------------------------------------
+networks:
+  auth0-network:
+    driver: bridge
+    name: auth0-enterprise-network
+
+# ----------------------------------------------------------------------------
+# Volumes
+# ----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+    name: auth0-enterprise-postgres-data
+  redis_data:
+    driver: local
+    name: auth0-enterprise-redis-data
+  # elasticsearch_data:
+  #   driver: local
+  #   name: auth0-enterprise-elasticsearch-data
+  # pgadmin_data:
+  #   driver: local
+  #   name: auth0-enterprise-pgadmin-data
