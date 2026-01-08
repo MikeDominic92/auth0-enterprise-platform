@@ -6,20 +6,20 @@ import { MatTableModule } from '@angular/material/table';
 import { MOCK_DATA } from '../shared/mock-data';
 
 @Component({
-    selector: 'app-dashboard',
-    standalone: true,
-    imports: [CommonModule, MatCardModule, MatIconModule, MatTableModule],
-    template: `
+  selector: 'app-dashboard',
+  standalone: true,
+  imports: [CommonModule, MatCardModule, MatIconModule, MatTableModule],
+  template: `
     <div class="flex flex-col gap-8">
       <!-- Welcome Message -->
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Welcome back, Administrator</h1>
-        <p class="text-gray-500">Here's what's happening in your organization today.</p>
+        <h1 class="page-title">Welcome back, Administrator</h1>
+        <p class="page-subtitle">Here's what's happening in your organization today.</p>
       </div>
 
       <!-- Stat Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <mat-card *ngFor="let stat of stats" class="card-shadow rounded-xl border-none">
+        <mat-card *ngFor="let stat of stats" class="card-shadow rounded-xl border-none transition-transform hover:-translate-y-1 duration-300">
           <mat-card-content class="p-6 flex items-start justify-between">
             <div>
               <p class="text-sm font-medium text-gray-500 mb-1">{{stat.label}}</p>
@@ -42,32 +42,32 @@ import { MOCK_DATA } from '../shared/mock-data';
             
             <!-- Timestamp Column -->
             <ng-container matColumnDef="timestamp">
-              <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4 pl-6"> Timestamp </th>
-              <td mat-cell *matCellDef="let element" class="pl-6 py-4 text-sm text-gray-600"> {{element.timestamp}} </td>
+              <th mat-header-cell *matHeaderCellDef class="pl-6"> Timestamp </th>
+              <td mat-cell *matCellDef="let element" class="pl-6 text-gray-600"> {{element.timestamp}} </td>
             </ng-container>
 
             <!-- User Column -->
             <ng-container matColumnDef="user">
-              <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4"> User </th>
-              <td mat-cell *matCellDef="let element" class="py-4 font-medium text-gray-900"> {{element.user}} </td>
+              <th mat-header-cell *matHeaderCellDef> User </th>
+              <td mat-cell *matCellDef="let element" class="font-medium text-gray-900"> {{element.user}} </td>
             </ng-container>
 
             <!-- Event Column -->
             <ng-container matColumnDef="event">
-              <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4"> Event </th>
-              <td mat-cell *matCellDef="let element" class="py-4 text-gray-700"> {{element.event}} </td>
+              <th mat-header-cell *matHeaderCellDef> Event </th>
+              <td mat-cell *matCellDef="let element" class="text-gray-700"> {{element.event}} </td>
             </ng-container>
 
             <!-- Organization Column -->
             <ng-container matColumnDef="org">
-              <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4"> Organization </th>
-              <td mat-cell *matCellDef="let element" class="py-4 text-gray-600"> {{element.org}} </td>
+              <th mat-header-cell *matHeaderCellDef> Organization </th>
+              <td mat-cell *matCellDef="let element" class="text-gray-600"> {{element.org}} </td>
             </ng-container>
 
              <!-- Status Column -->
              <ng-container matColumnDef="status">
-              <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4 pr-6"> Status </th>
-              <td mat-cell *matCellDef="let element" class="py-4 pr-6"> 
+              <th mat-header-cell *matHeaderCellDef class="pr-6"> Status </th>
+              <td mat-cell *matCellDef="let element" class="pr-6"> 
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize"
                       [ngClass]="{
                         'bg-green-100 text-green-800': element.status === 'success',
@@ -89,7 +89,7 @@ import { MOCK_DATA } from '../shared/mock-data';
   `
 })
 export class DashboardComponent {
-    stats = MOCK_DATA.stats;
-    recentEvents = MOCK_DATA.recentEvents;
-    displayedColumns: string[] = ['timestamp', 'user', 'event', 'org', 'status'];
+  stats = MOCK_DATA.stats;
+  recentEvents = MOCK_DATA.recentEvents;
+  displayedColumns: string[] = ['timestamp', 'user', 'event', 'org', 'status'];
 }

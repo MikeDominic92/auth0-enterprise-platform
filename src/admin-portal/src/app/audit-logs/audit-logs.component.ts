@@ -12,25 +12,28 @@ import { MatButtonModule } from '@angular/material/button';
 import { MOCK_DATA } from '../shared/mock-data';
 
 @Component({
-    selector: 'app-audit-logs',
-    standalone: true,
-    imports: [
-        CommonModule,
-        MatCardModule,
-        MatTableModule,
-        MatIconModule,
-        MatFormFieldModule,
-        MatInputModule,
-        MatSelectModule,
-        MatDatepickerModule,
-        MatNativeDateModule,
-        MatButtonModule
-    ],
-    template: `
+  selector: 'app-audit-logs',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatCardModule,
+    MatTableModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatButtonModule
+  ],
+  template: `
     <div class="flex flex-col gap-6">
        <!-- Header -->
-        <div class="flex items-center justify-between">
-            <h1 class="text-2xl font-bold text-gray-900">Audit Logs</h1>
+        <div class="flex items-center justify-between mb-2">
+            <div>
+                <h1 class="page-title">Audit Logs</h1>
+                <p class="page-subtitle">Track security events and administrative actions</p>
+            </div>
             <button mat-stroked-button color="primary" class="flex items-center gap-2">
                 <mat-icon>download</mat-icon> Export CSV
             </button>
@@ -80,39 +83,39 @@ import { MOCK_DATA } from '../shared/mock-data';
           
           <!-- Timestamp Column -->
           <ng-container matColumnDef="timestamp">
-            <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4 pl-6"> Timestamp </th>
-            <td mat-cell *matCellDef="let element" class="pl-6 py-4 text-sm text-gray-600 font-mono"> {{element.timestamp}} </td>
+            <th mat-header-cell *matHeaderCellDef class="pl-6"> Timestamp </th>
+            <td mat-cell *matCellDef="let element" class="pl-6 text-sm text-gray-600 font-mono"> {{element.timestamp}} </td>
           </ng-container>
 
           <!-- Event Type Column -->
           <ng-container matColumnDef="event">
-            <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4"> Event Type </th>
-            <td mat-cell *matCellDef="let element" class="py-4 font-medium text-gray-900"> {{element.event}} </td>
+            <th mat-header-cell *matHeaderCellDef> Event Type </th>
+            <td mat-cell *matCellDef="let element" class="font-medium text-gray-900"> {{element.event}} </td>
           </ng-container>
 
           <!-- Actor Column -->
           <ng-container matColumnDef="actor">
-            <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4"> Actor </th>
-            <td mat-cell *matCellDef="let element" class="py-4 text-gray-600"> {{element.user}} </td>
+            <th mat-header-cell *matHeaderCellDef> Actor </th>
+            <td mat-cell *matCellDef="let element" class="text-gray-600"> {{element.user}} </td>
           </ng-container>
 
             <!-- Org Column -->
             <ng-container matColumnDef="org">
-            <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4"> Organization </th>
-            <td mat-cell *matCellDef="let element" class="py-4 text-gray-600"> {{element.org}} </td>
+            <th mat-header-cell *matHeaderCellDef> Organization </th>
+            <td mat-cell *matCellDef="let element" class="text-gray-600"> {{element.org}} </td>
           </ng-container>
 
 
           <!-- IP Address Column (Mock) -->
           <ng-container matColumnDef="ip">
-            <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4"> IP Address </th>
-            <td mat-cell *matCellDef="let element" class="py-4 text-gray-500 text-sm font-mono"> 192.168.1.{{ [10, 24, 55, 99][0] }} </td>
+            <th mat-header-cell *matHeaderCellDef> IP Address </th>
+            <td mat-cell *matCellDef="let element" class="text-gray-500 text-sm font-mono"> 192.168.1.{{ [10, 24, 55, 99][0] }} </td>
           </ng-container>
 
            <!-- Details Column (Mock) -->
            <ng-container matColumnDef="details">
-            <th mat-header-cell *matHeaderCellDef class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-4 pr-6"> Details </th>
-            <td mat-cell *matCellDef="let element" class="py-4 pr-6 text-gray-500 text-sm truncate max-w-xs"> 
+            <th mat-header-cell *matHeaderCellDef class="pr-6"> Details </th>
+            <td mat-cell *matCellDef="let element" class="pr-6 text-gray-500 text-sm truncate max-w-xs"> 
                 User agent: Mozilla/5.0...
             </td>
           </ng-container>
@@ -125,7 +128,7 @@ import { MOCK_DATA } from '../shared/mock-data';
   `
 })
 export class AuditLogsComponent {
-    // Reusing recentEvents and adding mock fields in template for simplicity
-    logs = MOCK_DATA.recentEvents;
-    displayedColumns: string[] = ['timestamp', 'event', 'actor', 'org', 'ip', 'details'];
+  // Reusing recentEvents and adding mock fields in template for simplicity
+  logs = MOCK_DATA.recentEvents;
+  displayedColumns: string[] = ['timestamp', 'event', 'actor', 'org', 'ip', 'details'];
 }

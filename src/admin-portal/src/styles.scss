@@ -28,5 +28,32 @@ body {
 
 /* Custom Utilities */
 .card-shadow {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.page-title {
+  @apply text-3xl font-bold text-gray-900 tracking-tight;
+}
+
+.page-subtitle {
+  @apply text-base text-gray-500 mt-1;
+}
+
+/* Elegant Table Overrides */
+.mat-mdc-table {
+  background: transparent !important;
+}
+
+th.mat-mdc-header-cell {
+  @apply bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider py-5 !important;
+  border-bottom-color: #f3f4f6 !important;
+}
+
+td.mat-mdc-cell {
+  @apply py-5 text-sm border-gray-100 !important;
+  border-bottom-color: #f3f4f6 !important;
+}
+
+.mat-mdc-row:hover {
+  background-color: #f9fafb !important;
 }
