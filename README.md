@@ -1,4 +1,23 @@
+<div align="center">
+
 # Auth0 Enterprise B2B SaaS Authorization Platform
+
+### Production-Ready Multi-Tenant Identity Architecture
+
+[![Auth0](https://img.shields.io/badge/Auth0-Organizations-EB5424?style=for-the-badge&logo=auth0&logoColor=white)](https://auth0.com)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
+[![Security](https://img.shields.io/badge/Security-Enterprise_Grade-00D084?style=for-the-badge&logo=shield&logoColor=white)](./docs/DEPLOYMENT.md)
+
+---
+
+**Enterprise SSO in Hours, Not Weeks | Audit-Ready Compliance | Zero-Trust Multi-Tenancy**
+
+[View Demo Guide](./docs/DEMO_GUIDE.md) | [Deployment](./docs/DEPLOYMENT.md) | [Executive Summary](./docs/EXECUTIVE_SUMMARY.md)
+
+</div>
+
+---
 
 ## Executive Summary
 
@@ -24,10 +43,87 @@ This platform demonstrates a production-ready architecture pattern using Auth0 a
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
-| Enterprise Onboarding Time | 2-4 weeks | 2-4 hours | 95% reduction |
-| Audit Preparation Hours | 40+ hours/cycle | 4 hours/cycle | 90% reduction |
-| Authorization Change Deployment | Days (code deploy) | Minutes (config change) | 99% reduction |
-| Cross-Tenant Security Incidents | Variable | Zero-tolerance architecture | Risk elimination |
+| Enterprise Onboarding Time | 2-4 weeks | 2-4 hours | **95% reduction** |
+| Audit Preparation Hours | 40+ hours/cycle | 4 hours/cycle | **90% reduction** |
+| Authorization Change Deployment | Days (code deploy) | Minutes (config change) | **99% reduction** |
+| Cross-Tenant Security Incidents | Variable | Zero-tolerance architecture | **Risk elimination** |
+
+---
+
+## Key Features
+
+<table>
+<tr>
+<td width="50%">
+
+### Multi-Tenant Isolation
+- Auth0 Organizations for tenant boundaries
+- Cryptographic session binding via `org_id` claims
+- Per-tenant SSO connections (SAML/OIDC)
+- Customer-branded login experiences
+
+</td>
+<td width="50%">
+
+### Dynamic Authorization
+- Real-time permission injection via Actions
+- RBAC + ABAC policy engine
+- Subscription tier-based feature gating
+- No code deployments for permission changes
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### Compliance Automation
+- Immutable audit trails (7-year retention)
+- One-click SOC 2 / HIPAA / GDPR reports
+- Super admin action logging
+- Hash-chained event integrity
+
+</td>
+<td width="50%">
+
+### Enterprise Security
+- Risk-based authentication with MFA triggers
+- Algorithm confusion attack prevention
+- RFC 5322 email validation
+- Cross-org access protection
+
+</td>
+</tr>
+</table>
+
+---
+
+## Platform Screenshots
+
+<table>
+<tr>
+<td align="center" width="50%">
+<strong>Admin Dashboard</strong><br/>
+<em>Self-service user and role management</em>
+</td>
+<td align="center" width="50%">
+<strong>Compliance Reports</strong><br/>
+<em>Automated SOC 2/HIPAA/GDPR generation</em>
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<strong>Audit Trail</strong><br/>
+<em>Immutable authentication event logs</em>
+</td>
+<td align="center" width="50%">
+<strong>SSO Configuration</strong><br/>
+<em>SAML/OIDC wizard for enterprise customers</em>
+</td>
+</tr>
+</table>
+
+> [!NOTE]
+> Screenshots available in [docs/assets/](./docs/assets/) after running the demo.
 
 ---
 
