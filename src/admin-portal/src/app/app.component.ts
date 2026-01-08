@@ -76,8 +76,8 @@ import { AsyncPipe } from '@angular/common';
 
         <mat-sidenav-content class="bg-background flex flex-col h-full">
           <!-- Header -->
-          <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 shadow-sm z-10 sticky top-0">
-            <div class="flex items-center text-sm text-gray-500 gap-2">
+          <header class="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 md:px-8 shadow-sm z-10 sticky top-0">
+            <div class="flex items-center text-sm text-gray-500 gap-4">
                <!-- Toggle Button (Mobile Only) -->
               <button
                 type="button"
@@ -88,39 +88,49 @@ import { AsyncPipe } from '@angular/common';
                 <mat-icon aria-label="Side nav toggle icon">menu</mat-icon>
               </button>
 
-              <span class="font-medium text-gray-900 hidden md:inline">Dashboard</span>
-              <mat-icon class="text-lg mx-2 h-5 w-5 hidden md:inline">chevron_right</mat-icon>
-              <span class="font-semibold text-gray-900">Overview</span>
+              <div class="flex items-center">
+                <span class="font-medium text-gray-900 hidden md:inline text-base">Dashboard</span>
+                <mat-icon class="text-gray-400 mx-3 h-5 w-5 hidden md:inline">chevron_right</mat-icon>
+                <span class="font-bold text-gray-900 text-lg">Overview</span>
+              </div>
             </div>
 
-            <div class="flex items-center gap-2 md:gap-4">
+            <div class="flex items-center gap-4 md:gap-6">
               <div class="relative hidden md:block">
                 <mat-icon class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">search</mat-icon>
-                <input type="text" placeholder="Search..." class="pl-10 pr-4 py-2 bg-gray-100 rounded-lg text-sm border-none focus:ring-2 focus:ring-primary focus:bg-white transition-all w-64">
+                <input type="text" placeholder="Search..." class="pl-10 pr-4 py-2.5 bg-gray-50 rounded-lg text-sm border border-gray-200 focus:ring-2 focus:ring-primary focus:bg-white transition-all w-72">
               </div>
               
-              <button mat-icon-button class="text-gray-500 relative">
+              <button mat-icon-button class="text-gray-500 relative hover:bg-gray-50 transition-colors">
                 <mat-icon>notifications</mat-icon>
-                <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
+                <span class="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
               </button>
 
-              <button mat-button [matMenuTriggerFor]="userMenu" class="flex items-center gap-2 min-w-0">
-                <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold shrink-0">PA</div>
+              <div class="h-8 w-px bg-gray-200 mx-2 hidden md:block"></div>
+
+              <button mat-button [matMenuTriggerFor]="userMenu" class="flex items-center gap-3 min-w-0 !px-2 rounded-full hover:bg-gray-50 transition-colors">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-orange-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm border-2 border-white ring-1 ring-gray-100">PA</div>
                 <div class="text-left hidden md:block leading-tight">
-                  <div class="text-sm font-medium">Platform Admin</div>
-                  <div class="text-xs text-gray-500">admin&#64;auth0.com</div>
+                  <div class="text-sm font-bold text-gray-900">Platform Admin</div>
+                  <div class="text-xs text-gray-500 font-medium">admin&#64;auth0.com</div>
                 </div>
-                <mat-icon>arrow_drop_down</mat-icon>
+                <mat-icon class="text-gray-400">arrow_drop_down</mat-icon>
               </button>
               <mat-menu #userMenu="matMenu">
-                <button mat-menu-item>Profile</button>
-                <button mat-menu-item>Sign Out</button>
+                <button mat-menu-item>
+                  <mat-icon>account_circle</mat-icon>
+                  <span>Profile</span>
+                </button>
+                <button mat-menu-item>
+                  <mat-icon>logout</mat-icon>
+                  <span>Sign Out</span>
+                </button>
               </mat-menu>
             </div>
           </header>
 
           <!-- Main Content -->
-          <main class="flex-1 overflow-auto p-4 md:p-8">
+          <main class="flex-1 overflow-auto p-6 md:p-10">
             <router-outlet></router-outlet>
           </main>
         </mat-sidenav-content>

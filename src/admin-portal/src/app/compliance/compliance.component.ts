@@ -72,8 +72,9 @@ import { MOCK_DATA } from '../shared/mock-data';
                 </mat-form-field>
 
                 <div class="flex items-center">
-                    <button mat-flat-button color="primary" class="!h-[56px] w-full text-base font-bold rounded-lg shadow-lg shadow-orange-200 hover:shadow-orange-300 transition-all">
-                        <mat-icon class="mr-2">assessment</mat-icon> Generate Report
+                    <button mat-flat-button color="primary" class="!h-14 w-full text-base font-bold rounded-lg shadow-lg shadow-orange-200 hover:shadow-orange-300 transition-all flex items-center justify-center gap-2">
+                        <mat-icon class="material-icons-outlined">assessment</mat-icon> 
+                        <span>Generate Report</span>
                     </button>
                 </div>
             </div>
