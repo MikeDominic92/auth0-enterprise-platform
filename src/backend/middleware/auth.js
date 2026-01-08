@@ -52,6 +52,12 @@ const AUTH0_CLAIMS_NAMESPACE = process.env.AUTH0_CLAIMS_NAMESPACE || AUTH0_AUDIE
 // JWT Validation Middleware
 // -----------------------------------------------------------------------------
 
+// Clock tolerance for token expiration (handles clock skew between servers)
+const CLOCK_TOLERANCE_SECONDS = parseInt(process.env.AUTH0_CLOCK_TOLERANCE, 10) || 30;
+
+// Allowed signing algorithms (RS256 is required by Auth0)
+const ALLOWED_ALGORITHMS = ['RS256'];
+
 /**
  * Main JWT validation middleware
  * Validates the access token in the Authorization header
@@ -60,7 +66,31 @@ const checkJwt = auth({
     audience: AUTH0_AUDIENCE,
     issuerBaseURL: AUTH0_ISSUER,
     tokenSigningAlg: 'RS256',
+    clockTolerance: CLOCK_TOLERANCE_SECONDS,
 });
+
+/**
+ * Middleware to validate token signing algorithm
+ * Rejects tokens signed with algorithms other than RS256
+ * Protects against algorithm confusion attacks
+ */
+const validateAlgorithm = (req, res, next) => {
+    if (!req.auth?.header?.alg) {
+        return next();
+    }
+
+    const algorithm = req.auth.header.alg;
+    if (!ALLOWED_ALGORITHMS.includes(algorithm)) {
+        console.error(`[SECURITY] Rejected token with invalid algorithm: ${algorithm}`);
+        return res.status(401).json({
+            error: 'Unauthorized',
+            message: 'Invalid token signing algorithm',
+            code: 'invalid_algorithm',
+        });
+    }
+
+    next();
+};
 
 /**
  * Optional authentication middleware
@@ -318,6 +348,7 @@ module.exports = {
     // Core authentication
     checkJwt,
     optionalAuth,
+    validateAlgorithm,
 
     // Scope validation
     requireScopes,
@@ -334,4 +365,8 @@ module.exports = {
     authErrorHandler,
     errorHandler,
     notFoundHandler,
+
+    // Configuration exports (for testing)
+    AUTH0_CLAIMS_NAMESPACE,
+    CLOCK_TOLERANCE_SECONDS,
 };

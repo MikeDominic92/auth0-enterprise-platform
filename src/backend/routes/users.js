@@ -117,13 +117,52 @@ router.post('/', requirePermission('users:create'), async (req, res, next) => {
       metadata = {}
     } = req.body;
 
-    // Validate email
-    if (!email || !email.includes('@')) {
+    // Validate email with RFC 5322 compliant regex
+    // Covers standard email format requirements
+    const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'EMAIL_REQUIRED',
+          message: 'Email address is required'
+        }
+      });
+    }
+
+    // Validate email length (max 254 chars per RFC 5321)
+    if (email.length > 254) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'EMAIL_TOO_LONG',
+          message: 'Email address cannot exceed 254 characters'
+        }
+      });
+    }
+
+    // Normalize email to lowercase
+    const normalizedEmail = email.toLowerCase().trim();
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
       return res.status(400).json({
         success: false,
         error: {
           code: 'INVALID_EMAIL',
-          message: 'Valid email address is required'
+          message: 'Please provide a valid email address'
+        }
+      });
+    }
+
+    // Validate local part length (max 64 chars per RFC 5321)
+    const [localPart] = normalizedEmail.split('@');
+    if (localPart.length > 64) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_EMAIL',
+          message: 'Email local part cannot exceed 64 characters'
         }
       });
     }
@@ -134,7 +173,7 @@ router.post('/', requirePermission('users:create'), async (req, res, next) => {
       : req.user.org_id;
 
     const user = await UserService.createUser({
-      email,
+      email: normalizedEmail,
       name,
       organizationId,
       roleIds: role_ids,

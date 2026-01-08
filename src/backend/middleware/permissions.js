@@ -3,9 +3,12 @@
  *
  * Role-based and permission-based access control middleware.
  * Supports hierarchical permissions, resource ownership, and dynamic checks.
+ * Includes audit logging for security-sensitive operations.
  *
  * @module backend/middleware/permissions
  */
+
+const pool = require('../db');
 
 // -----------------------------------------------------------------------------
 // Permission Constants
@@ -129,12 +132,54 @@ function hasPermission(user, permission) {
         }
     }
 
-    // Check for admin override
+    // Check for admin override (super admin bypass)
     if (user.permissions?.includes(PERMISSIONS.ADMIN_FULL)) {
+        // Log super admin bypass for audit compliance
+        auditAdminBypass(user, permission).catch(err => {
+            console.error('[AUDIT] Failed to log admin bypass:', err.message);
+        });
         return true;
     }
 
     return false;
+}
+
+/**
+ * Log super admin permission bypass for compliance auditing
+ * Critical for SOC2 and security monitoring
+ *
+ * @param {Object} user - User performing the action
+ * @param {string} permission - Permission being bypassed
+ */
+async function auditAdminBypass(user, permission) {
+    try {
+        await pool.query(`
+            INSERT INTO audit_logs (
+                organization_id,
+                user_id,
+                action,
+                resource_type,
+                details,
+                ip_address,
+                created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `, [
+            user.org_id || 'system',
+            user.id || user.sub,
+            'admin.permission_bypass',
+            'permission',
+            JSON.stringify({
+                bypassed_permission: permission,
+                user_roles: user.roles || [],
+                user_permissions: user.permissions || [],
+                reason: 'ADMIN_FULL permission granted'
+            }),
+            user._requestIp || 'unknown'
+        ]);
+    } catch (error) {
+        // Don't throw - audit logging should never block operations
+        console.error('[AUDIT] Failed to log admin bypass:', error.message);
+    }
 }
 
 /**
@@ -423,24 +468,193 @@ function attachPermissionsToResponse(req, res, next) {
 
 /**
  * Log permission check results for auditing
+ * Enhanced with database logging for compliance
  */
 function logPermissionCheck(req, res, next) {
     const originalJson = res.json.bind(res);
 
+    // Attach request IP to user for audit logging
+    if (req.user) {
+        req.user._requestIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    }
+
     res.json = (data) => {
         // Log permission-related responses
         if (res.statusCode === 403) {
-            console.log('[AUDIT] Permission denied:', {
+            const auditEntry = {
                 user: req.user?.id,
                 path: req.path,
                 method: req.method,
                 timestamp: new Date().toISOString(),
+                ip: req.ip,
+                userAgent: req.headers['user-agent'],
+            };
+            console.log('[AUDIT] Permission denied:', auditEntry);
+
+            // Async database logging (don't await)
+            logPermissionDenied(req, auditEntry).catch(err => {
+                console.error('[AUDIT] Failed to log to database:', err.message);
             });
         }
         return originalJson(data);
     };
 
     next();
+}
+
+/**
+ * Log permission denial to database for compliance
+ */
+async function logPermissionDenied(req, auditEntry) {
+    try {
+        await pool.query(`
+            INSERT INTO audit_logs (
+                organization_id,
+                user_id,
+                action,
+                resource_type,
+                resource_id,
+                details,
+                ip_address,
+                created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        `, [
+            req.user?.org_id || 'unknown',
+            req.user?.id || 'anonymous',
+            'permission.denied',
+            'api_endpoint',
+            `${auditEntry.method}:${auditEntry.path}`,
+            JSON.stringify({
+                method: auditEntry.method,
+                path: auditEntry.path,
+                userAgent: auditEntry.userAgent,
+                userRoles: req.user?.roles || [],
+                userPermissions: req.user?.permissions || []
+            }),
+            auditEntry.ip
+        ]);
+    } catch (error) {
+        // Don't throw - just log the error
+        throw error;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Attribute-Based Access Control (ABAC)
+// -----------------------------------------------------------------------------
+
+/**
+ * ABAC Policy definitions for fine-grained access control
+ */
+const ABACPolicies = {
+    /**
+     * Require resource to belong to same organization as user
+     */
+    sameOrganization: (getResourceOrgId) => {
+        return async (req) => {
+            const resourceOrgId = typeof getResourceOrgId === 'function'
+                ? await getResourceOrgId(req)
+                : req.params[getResourceOrgId];
+
+            return req.user?.org_id === resourceOrgId;
+        };
+    },
+
+    /**
+     * Require resource to be owned by the requesting user
+     */
+    ownedBy: (getOwnerId) => {
+        return async (req) => {
+            const ownerId = typeof getOwnerId === 'function'
+                ? await getOwnerId(req)
+                : req.params[getOwnerId];
+
+            return req.user?.id === ownerId || req.user?.sub === ownerId;
+        };
+    },
+
+    /**
+     * Require user to have specific attribute value
+     */
+    hasAttribute: (attributeName, expectedValue) => {
+        return async (req) => {
+            const actualValue = req.user?.metadata?.[attributeName];
+            if (typeof expectedValue === 'function') {
+                return expectedValue(actualValue, req);
+            }
+            return actualValue === expectedValue;
+        };
+    },
+
+    /**
+     * Combine multiple policies with AND logic
+     */
+    all: (...policies) => {
+        return async (req) => {
+            for (const policy of policies) {
+                if (!(await policy(req))) {
+                    return false;
+                }
+            }
+            return true;
+        };
+    },
+
+    /**
+     * Combine multiple policies with OR logic
+     */
+    any: (...policies) => {
+        return async (req) => {
+            for (const policy of policies) {
+                if (await policy(req)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    }
+};
+
+/**
+ * Create middleware requiring ABAC policy evaluation
+ *
+ * @param {Function} policy - ABAC policy function
+ * @param {string} [bypassPermission] - Permission that bypasses ABAC check
+ * @returns {Function} Express middleware
+ */
+function requireABAC(policy, bypassPermission = null) {
+    return async (req, res, next) => {
+        const user = req.user;
+
+        if (!user) {
+            return res.status(401).json({
+                error: 'Unauthorized',
+                message: 'Authentication required',
+            });
+        }
+
+        // Check bypass permission
+        if (bypassPermission && hasPermission(user, bypassPermission)) {
+            return next();
+        }
+
+        try {
+            const allowed = await policy(req);
+            if (!allowed) {
+                return res.status(403).json({
+                    error: 'Forbidden',
+                    message: 'Access denied by policy',
+                });
+            }
+            next();
+        } catch (error) {
+            console.error('[ABAC] Policy evaluation error:', error.message);
+            return res.status(500).json({
+                error: 'Internal Server Error',
+                message: 'Failed to evaluate access policy',
+            });
+        }
+    };
 }
 
 // -----------------------------------------------------------------------------
@@ -466,7 +680,14 @@ module.exports = {
     requireTeamMembership,
     conditionalPermissions,
 
+    // ABAC
+    requireABAC,
+    ABACPolicies,
+
     // Utility middleware
     attachPermissionsToResponse,
     logPermissionCheck,
+
+    // Compatibility alias
+    requirePermission: requirePermissions,
 };
