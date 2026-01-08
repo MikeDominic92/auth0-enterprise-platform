@@ -5,8 +5,10 @@
 ### Production-Ready Multi-Tenant Identity Architecture
 
 [![Auth0](https://img.shields.io/badge/Auth0-Organizations-EB5424?style=for-the-badge&logo=auth0&logoColor=white)](https://auth0.com)
-[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-14+-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Security](https://img.shields.io/badge/Security-Enterprise_Grade-00D084?style=for-the-badge&logo=shield&logoColor=white)](./docs/DEPLOYMENT.md)
 
 ---
@@ -94,6 +96,54 @@ This platform demonstrates a production-ready architecture pattern using Auth0 a
 </td>
 </tr>
 </table>
+
+---
+
+## Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/MikeDominic92/auth0-enterprise-platform.git
+cd auth0-enterprise-platform
+
+# Copy environment file and configure
+cp .env.example .env
+# Edit .env with your Auth0 credentials
+
+# Start all services with Docker
+npm run dev
+
+# Or run services individually for development:
+npm run db:up           # Start PostgreSQL and Redis
+npm run dev:backend     # Start FastAPI backend (port 8000)
+npm run dev:frontend    # Start Next.js frontend (port 3000)
+```
+
+### Project Structure
+
+```
+auth0-enterprise-platform/
+|-- src/
+|   |-- backend/           # FastAPI Python backend
+|   |   |-- app/           # Application code
+|   |   |-- alembic/       # Database migrations
+|   |   |-- tests/         # Backend tests
+|   |   |-- Dockerfile
+|   |   +-- requirements.txt
+|   |-- frontend/          # Next.js 14 frontend
+|   |   |-- src/
+|   |   |   |-- app/       # App Router pages
+|   |   |   |-- components/ # React components
+|   |   |   |-- hooks/     # React Query hooks
+|   |   |   |-- lib/       # API client, utilities
+|   |   |   +-- types/     # TypeScript types
+|   |   |-- Dockerfile
+|   |   +-- package.json
+|   +-- auth0-actions/     # Auth0 Actions scripts
+|-- docker-compose.yml     # Full stack orchestration
+|-- package.json           # Root scripts
++-- .env.example           # Environment template
+```
 
 ---
 
