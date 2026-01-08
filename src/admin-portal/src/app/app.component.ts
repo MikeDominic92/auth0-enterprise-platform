@@ -88,7 +88,7 @@ import { MatMenuModule } from '@angular/material/menu';
                 <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">PA</div>
                 <div class="text-left hidden md:block leading-tight">
                   <div class="text-sm font-medium">Platform Admin</div>
-                  <div class="text-xs text-gray-500">admin@auth0.com</div>
+                  <div class="text-xs text-gray-500">admin&#64;auth0.com</div>
                 </div>
                 <mat-icon>arrow_drop_down</mat-icon>
               </button>
