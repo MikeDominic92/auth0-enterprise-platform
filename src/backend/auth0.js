@@ -16,6 +16,13 @@ const REQUIRED_ENV_VARS = [
     'AUTH0_CLIENT_SECRET',
 ];
 
+// Retry configuration
+const RETRY_CONFIG = {
+    maxRetries: parseInt(process.env.AUTH0_MAX_RETRIES, 10) || 3,
+    baseDelayMs: parseInt(process.env.AUTH0_RETRY_BASE_DELAY, 10) || 1000,
+    maxDelayMs: parseInt(process.env.AUTH0_RETRY_MAX_DELAY, 10) || 10000,
+};
+
 /**
  * Validate required environment variables
  * @throws {Error} If required environment variables are missing
@@ -27,6 +34,54 @@ function validateConfig() {
         throw new Error(
             `[ERROR] Missing required Auth0 configuration: ${missing.join(', ')}`
         );
+    }
+}
+
+/**
+ * Execute an API call with exponential backoff retry logic
+ * Handles 429 (rate limit) and 5xx (server error) responses
+ *
+ * @param {Function} apiCall - Async function to execute
+ * @param {string} operationName - Name of the operation for logging
+ * @param {number} [retryCount=0] - Current retry attempt
+ * @returns {Promise<*>} - Result of the API call
+ */
+async function withRetry(apiCall, operationName, retryCount = 0) {
+    try {
+        return await apiCall();
+    } catch (error) {
+        const statusCode = error.statusCode || error.status;
+
+        // Determine if error is retryable
+        const isRateLimited = statusCode === 429;
+        const isServerError = statusCode >= 500 && statusCode < 600;
+        const isRetryable = isRateLimited || isServerError;
+
+        if (!isRetryable || retryCount >= RETRY_CONFIG.maxRetries) {
+            // Not retryable or max retries exceeded
+            throw error;
+        }
+
+        // Calculate delay with exponential backoff and jitter
+        let delayMs;
+        if (isRateLimited && error.headers?.['retry-after']) {
+            // Use Retry-After header if available
+            delayMs = parseInt(error.headers['retry-after'], 10) * 1000;
+        } else {
+            // Exponential backoff: 1s, 2s, 4s with jitter
+            delayMs = Math.min(
+                RETRY_CONFIG.baseDelayMs * Math.pow(2, retryCount) + Math.random() * 500,
+                RETRY_CONFIG.maxDelayMs
+            );
+        }
+
+        console.log(
+            `[RETRY] ${operationName} failed with ${statusCode}, ` +
+            `retrying in ${delayMs}ms (attempt ${retryCount + 1}/${RETRY_CONFIG.maxRetries})`
+        );
+
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        return withRetry(apiCall, operationName, retryCount + 1);
     }
 }
 
@@ -121,7 +176,10 @@ async function getUsers(options = {}) {
     }
 
     try {
-        const response = await client.users.getAll(params);
+        const response = await withRetry(
+            () => client.users.getAll(params),
+            'getUsers'
+        );
         return {
             users: response.data,
             total: response.data.length,
@@ -130,7 +188,7 @@ async function getUsers(options = {}) {
         };
     } catch (error) {
         console.error('[ERROR] Failed to fetch users:', error.message);
-        throw new Auth0Error('Failed to fetch users', error);
+        throw new Auth0Error('Failed to fetch users', error, { params });
     }
 }
 
@@ -144,14 +202,17 @@ async function getUser(userId) {
     const client = getManagementClient();
 
     try {
-        const response = await client.users.get({ id: userId });
+        const response = await withRetry(
+            () => client.users.get({ id: userId }),
+            'getUser'
+        );
         return response.data;
     } catch (error) {
         if (error.statusCode === 404) {
             return null;
         }
         console.error('[ERROR] Failed to fetch user:', error.message);
-        throw new Auth0Error('Failed to fetch user', error);
+        throw new Auth0Error('Failed to fetch user', error, { userId });
     }
 }
 
@@ -183,11 +244,14 @@ async function createUser(userData) {
     }
 
     try {
-        const response = await client.users.create(user);
+        const response = await withRetry(
+            () => client.users.create(user),
+            'createUser'
+        );
         return response.data;
     } catch (error) {
         console.error('[ERROR] Failed to create user:', error.message);
-        throw new Auth0Error('Failed to create user', error);
+        throw new Auth0Error('Failed to create user', error, { email: userData.email });
     }
 }
 
@@ -215,11 +279,14 @@ async function updateUser(userId, userData) {
     }
 
     try {
-        const response = await client.users.update({ id: userId }, updateData);
+        const response = await withRetry(
+            () => client.users.update({ id: userId }, updateData),
+            'updateUser'
+        );
         return response.data;
     } catch (error) {
         console.error('[ERROR] Failed to update user:', error.message);
-        throw new Auth0Error('Failed to update user', error);
+        throw new Auth0Error('Failed to update user', error, { userId });
     }
 }
 
@@ -233,10 +300,13 @@ async function deleteUser(userId) {
     const client = getManagementClient();
 
     try {
-        await client.users.delete({ id: userId });
+        await withRetry(
+            () => client.users.delete({ id: userId }),
+            'deleteUser'
+        );
     } catch (error) {
         console.error('[ERROR] Failed to delete user:', error.message);
-        throw new Auth0Error('Failed to delete user', error);
+        throw new Auth0Error('Failed to delete user', error, { userId });
     }
 }
 
@@ -254,11 +324,14 @@ async function getRoles(options = {}) {
     const client = getManagementClient();
 
     try {
-        const response = await client.roles.getAll({
-            page: options.page || 0,
-            per_page: options.perPage || 50,
-            include_totals: true,
-        });
+        const response = await withRetry(
+            () => client.roles.getAll({
+                page: options.page || 0,
+                per_page: options.perPage || 50,
+                include_totals: true,
+            }),
+            'getRoles'
+        );
         return response.data;
     } catch (error) {
         console.error('[ERROR] Failed to fetch roles:', error.message);
@@ -277,10 +350,13 @@ async function assignRolesToUser(userId, roleIds) {
     const client = getManagementClient();
 
     try {
-        await client.users.assignRoles({ id: userId }, { roles: roleIds });
+        await withRetry(
+            () => client.users.assignRoles({ id: userId }, { roles: roleIds }),
+            'assignRolesToUser'
+        );
     } catch (error) {
         console.error('[ERROR] Failed to assign roles:', error.message);
-        throw new Auth0Error('Failed to assign roles to user', error);
+        throw new Auth0Error('Failed to assign roles to user', error, { userId, roleIds });
     }
 }
 
@@ -295,10 +371,13 @@ async function removeRolesFromUser(userId, roleIds) {
     const client = getManagementClient();
 
     try {
-        await client.users.deleteRoles({ id: userId }, { roles: roleIds });
+        await withRetry(
+            () => client.users.deleteRoles({ id: userId }, { roles: roleIds }),
+            'removeRolesFromUser'
+        );
     } catch (error) {
         console.error('[ERROR] Failed to remove roles:', error.message);
-        throw new Auth0Error('Failed to remove roles from user', error);
+        throw new Auth0Error('Failed to remove roles from user', error, { userId, roleIds });
     }
 }
 
@@ -312,11 +391,14 @@ async function getUserRoles(userId) {
     const client = getManagementClient();
 
     try {
-        const response = await client.users.getRoles({ id: userId });
+        const response = await withRetry(
+            () => client.users.getRoles({ id: userId }),
+            'getUserRoles'
+        );
         return response.data;
     } catch (error) {
         console.error('[ERROR] Failed to fetch user roles:', error.message);
-        throw new Auth0Error('Failed to fetch user roles', error);
+        throw new Auth0Error('Failed to fetch user roles', error, { userId });
     }
 }
 
@@ -334,11 +416,14 @@ async function getOrganizations(options = {}) {
     const client = getManagementClient();
 
     try {
-        const response = await client.organizations.getAll({
-            page: options.page || 0,
-            per_page: options.perPage || 50,
-            include_totals: true,
-        });
+        const response = await withRetry(
+            () => client.organizations.getAll({
+                page: options.page || 0,
+                per_page: options.perPage || 50,
+                include_totals: true,
+            }),
+            'getOrganizations'
+        );
         return response.data;
     } catch (error) {
         console.error('[ERROR] Failed to fetch organizations:', error.message);
@@ -357,16 +442,19 @@ async function getOrganizationMembers(orgId, options = {}) {
     const client = getManagementClient();
 
     try {
-        const response = await client.organizations.getMembers({
-            id: orgId,
-            page: options.page || 0,
-            per_page: options.perPage || 50,
-            include_totals: true,
-        });
+        const response = await withRetry(
+            () => client.organizations.getMembers({
+                id: orgId,
+                page: options.page || 0,
+                per_page: options.perPage || 50,
+                include_totals: true,
+            }),
+            'getOrganizationMembers'
+        );
         return response.data;
     } catch (error) {
         console.error('[ERROR] Failed to fetch organization members:', error.message);
-        throw new Auth0Error('Failed to fetch organization members', error);
+        throw new Auth0Error('Failed to fetch organization members', error, { orgId });
     }
 }
 
@@ -400,7 +488,10 @@ async function getLogs(options = {}) {
     }
 
     try {
-        const response = await client.logs.getAll(params);
+        const response = await withRetry(
+            () => client.logs.getAll(params),
+            'getLogs'
+        );
         return response.data;
     } catch (error) {
         console.error('[ERROR] Failed to fetch logs:', error.message);
@@ -418,11 +509,14 @@ async function getLog(logId) {
     const client = getManagementClient();
 
     try {
-        const response = await client.logs.get({ id: logId });
+        const response = await withRetry(
+            () => client.logs.get({ id: logId }),
+            'getLog'
+        );
         return response.data;
     } catch (error) {
         console.error('[ERROR] Failed to fetch log:', error.message);
-        throw new Auth0Error('Failed to fetch log', error);
+        throw new Auth0Error('Failed to fetch log', error, { logId });
     }
 }
 
@@ -432,14 +526,17 @@ async function getLog(logId) {
 
 /**
  * Custom error class for Auth0 API errors
+ * Enhanced with context information for debugging
  */
 class Auth0Error extends Error {
-    constructor(message, originalError = null) {
+    constructor(message, originalError = null, context = {}) {
         super(message);
         this.name = 'Auth0Error';
         this.originalError = originalError;
         this.statusCode = originalError?.statusCode || 500;
         this.errorCode = originalError?.errorCode || 'unknown_error';
+        this.context = context;
+        this.timestamp = new Date().toISOString();
 
         // Capture stack trace
         Error.captureStackTrace(this, this.constructor);
@@ -454,6 +551,52 @@ class Auth0Error extends Error {
             message: this.message,
             statusCode: this.statusCode,
             errorCode: this.errorCode,
+            context: this.context,
+            timestamp: this.timestamp,
+        };
+    }
+}
+
+/**
+ * Validate that the Auth0 client has the required scopes
+ * Call this at application startup to fail fast
+ *
+ * @returns {Promise<Object>} - Validation result with scope information
+ */
+async function validateScopes() {
+    const client = getManagementClient();
+    const requiredOperations = ['read:users', 'read:roles', 'read:organizations'];
+
+    try {
+        // Test each required operation with a minimal query
+        const results = await Promise.allSettled([
+            withRetry(() => client.users.getAll({ per_page: 1 }), 'validateScopes:users'),
+            withRetry(() => client.roles.getAll({ per_page: 1 }), 'validateScopes:roles'),
+            withRetry(() => client.organizations.getAll({ per_page: 1 }), 'validateScopes:orgs'),
+        ]);
+
+        const failed = results
+            .map((r, i) => ({ result: r, operation: requiredOperations[i] }))
+            .filter(({ result }) => result.status === 'rejected');
+
+        if (failed.length > 0) {
+            const failedOps = failed.map(f => f.operation).join(', ');
+            console.error(`[AUTH0] Scope validation failed for: ${failedOps}`);
+            return {
+                valid: false,
+                missingScopes: failed.map(f => f.operation),
+                errors: failed.map(f => f.result.reason?.message),
+            };
+        }
+
+        console.log('[AUTH0] Scope validation passed');
+        return { valid: true, missingScopes: [] };
+
+    } catch (error) {
+        console.error('[AUTH0] Scope validation error:', error.message);
+        return {
+            valid: false,
+            error: error.message,
         };
     }
 }
@@ -487,6 +630,10 @@ module.exports = {
     // Log operations
     getLogs,
     getLog,
+
+    // Utility functions
+    withRetry,
+    validateScopes,
 
     // Error class
     Auth0Error,

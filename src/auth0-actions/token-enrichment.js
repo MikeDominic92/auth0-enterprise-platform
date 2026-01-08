@@ -25,10 +25,26 @@ exports.onExecutePostLogin = async (event, api) => {
   // ---------------------------------------------------------------------------
   // CONFIGURATION
   // ---------------------------------------------------------------------------
+  /**
+   * Validate token namespace format
+   * Must be a valid URL to prevent claim collisions
+   */
+  function validateNamespace(namespace) {
+    if (!namespace) return false;
+    try {
+      const url = new URL(namespace);
+      return url.protocol === 'https:' && namespace.endsWith('/');
+    } catch {
+      return false;
+    }
+  }
+
   const CONFIG = {
-    // Token namespace - MUST be a URL you control
+    // Token namespace from secrets - MUST be a valid HTTPS URL you control
     // This prevents collision with standard claims
-    NAMESPACE: 'https://yourapp.com/',
+    NAMESPACE: validateNamespace(event.secrets.TOKEN_NAMESPACE)
+      ? event.secrets.TOKEN_NAMESPACE
+      : 'https://yourapp.com/',
 
     // Geographic restrictions
     // Leave empty or null to allow all countries
@@ -44,12 +60,78 @@ exports.onExecutePostLogin = async (event, api) => {
     MAX_TEAMS_IN_TOKEN: 50,
 
     // Maximum number of permissions to include in token
-    MAX_PERMISSIONS_IN_TOKEN: 100,
+    MAX_PERMISSIONS_IN_TOKEN: parseInt(event.secrets.MAX_PERMISSIONS_IN_TOKEN) || 100,
 
     // Risk score thresholds for token claims
-    RISK_SCORE_HIGH: 70,
-    RISK_SCORE_MEDIUM: 40
+    RISK_SCORE_HIGH: parseInt(event.secrets.RISK_SCORE_HIGH) || 70,
+    RISK_SCORE_MEDIUM: parseInt(event.secrets.RISK_SCORE_MEDIUM) || 40,
+
+    // Request timeout for external API calls (milliseconds)
+    REQUEST_TIMEOUT_MS: parseInt(event.secrets.REQUEST_TIMEOUT_MS) || 5000,
+
+    // Scope-to-claims mapping - only include claims if scope is present
+    // Format in secrets: scope:claim1,claim2;scope2:claim3,claim4
+    SCOPE_CLAIM_MAPPING: parseScopeClaimMapping(event.secrets.SCOPE_CLAIM_MAPPING),
+
+    // Flag to indicate when permissions are truncated
+    TRUNCATION_WARNING_ENABLED: event.secrets.TRUNCATION_WARNING_ENABLED !== 'false'
   };
+
+  /**
+   * Parse scope-to-claims mapping from secrets
+   * Format: scope:claim1,claim2;scope2:claim3,claim4
+   */
+  function parseScopeClaimMapping(mappingString) {
+    if (!mappingString) {
+      // Default scope-claim mapping
+      return {
+        'openid': ['sub'],
+        'profile': ['name', 'nickname', 'picture'],
+        'email': ['email', 'email_verified'],
+        'org': ['org_id', 'org_name', 'org_tier'],
+        'teams': ['teams', 'team_ids'],
+        'permissions': ['permissions', 'roles'],
+        'department': ['department', 'department_id'],
+        'risk': ['risk_score', 'risk_level']
+      };
+    }
+    const mapping = {};
+    mappingString.split(';').forEach(entry => {
+      const [scope, claims] = entry.trim().split(':');
+      if (scope && claims) {
+        mapping[scope.trim()] = claims.split(',').map(c => c.trim());
+      }
+    });
+    return mapping;
+  }
+
+  /**
+   * Filter claims based on requested scopes
+   * Only include claims that the client has permission to access
+   */
+  function filterClaimsByScope(claims, requestedScopes) {
+    if (!requestedScopes || requestedScopes.length === 0) {
+      return claims; // No filtering if no scopes specified
+    }
+
+    const allowedClaims = new Set();
+    requestedScopes.forEach(scope => {
+      const scopeClaims = CONFIG.SCOPE_CLAIM_MAPPING[scope] || [];
+      scopeClaims.forEach(claim => allowedClaims.add(claim));
+    });
+
+    // Always allow certain base claims
+    ['org_id', 'roles'].forEach(c => allowedClaims.add(c));
+
+    const filteredClaims = {};
+    Object.keys(claims).forEach(key => {
+      if (allowedClaims.has(key)) {
+        filteredClaims[key] = claims[key];
+      }
+    });
+
+    return filteredClaims;
+  }
 
   // ---------------------------------------------------------------------------
   // HELPER FUNCTIONS
@@ -351,7 +433,10 @@ exports.onExecutePostLogin = async (event, api) => {
     ]);
 
     // Step 3: Resolve permissions based on roles and teams
-    const permissions = await fetchPermissions(event.user.user_id, orgId, roles, teams);
+    let permissions = await fetchPermissions(event.user.user_id, orgId, roles, teams);
+
+    // Check if permissions were truncated
+    const permissionsTruncated = permissions.length >= CONFIG.MAX_PERMISSIONS_IN_TOKEN;
 
     // Step 4: Calculate risk level for token
     const risk = calculateTokenRiskLevel(event);
@@ -422,18 +507,27 @@ exports.onExecutePostLogin = async (event, api) => {
         ip: event.request?.ip,
         country: countryCode,
         mfa_completed: event.authentication?.methods?.some(m => m.name === 'mfa') || false
-      }
+      },
+
+      // Truncation warning flag (when permissions exceed limit)
+      permissions_truncated: CONFIG.TRUNCATION_WARNING_ENABLED && permissionsTruncated
     };
 
-    // Step 7: Set ID token claims
-    Object.entries(idTokenClaims).forEach(([key, value]) => {
+    // Step 6.5: Filter claims based on requested scopes
+    const requestedScopes = event.request?.query?.scope?.split(' ') ||
+                           event.transaction?.requested_scopes || [];
+    const filteredIdTokenClaims = filterClaimsByScope(idTokenClaims, requestedScopes);
+    const filteredAccessTokenClaims = filterClaimsByScope(accessTokenClaims, requestedScopes);
+
+    // Step 7: Set ID token claims (scope-filtered)
+    Object.entries(filteredIdTokenClaims).forEach(([key, value]) => {
       if (value !== null && value !== undefined) {
         api.idToken.setCustomClaim(`${CONFIG.NAMESPACE}${key}`, value);
       }
     });
 
-    // Step 8: Set Access token claims
-    Object.entries(accessTokenClaims).forEach(([key, value]) => {
+    // Step 8: Set Access token claims (scope-filtered)
+    Object.entries(filteredAccessTokenClaims).forEach(([key, value]) => {
       if (value !== null && value !== undefined) {
         api.accessToken.setCustomClaim(`${CONFIG.NAMESPACE}${key}`, value);
       }

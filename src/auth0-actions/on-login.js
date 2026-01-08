@@ -27,18 +27,24 @@ exports.onExecutePostLogin = async (event, api) => {
     RISK_THRESHOLD_BLOCK: parseInt(event.secrets.RISK_THRESHOLD_BLOCK) || 80,
 
     // Business hours definition (UTC)
-    BUSINESS_HOURS_START: 6,  // 6 AM UTC
-    BUSINESS_HOURS_END: 22,   // 10 PM UTC
+    BUSINESS_HOURS_START: parseInt(event.secrets.BUSINESS_HOURS_START) || 6,
+    BUSINESS_HOURS_END: parseInt(event.secrets.BUSINESS_HOURS_END) || 22,
 
-    // Suspicious countries list (ISO 3166-1 alpha-2 codes)
-    // Customize based on your organization's requirements
-    HIGH_RISK_COUNTRIES: ['KP', 'IR', 'SY', 'CU'],
+    // Suspicious countries list from secrets (fallback to defaults)
+    // Format: comma-separated ISO 3166-1 alpha-2 codes
+    HIGH_RISK_COUNTRIES: (event.secrets.HIGH_RISK_COUNTRIES || 'KP,IR,SY,CU').split(',').map(c => c.trim()),
 
     // Maximum allowed failed attempts before considering high risk
-    MAX_FAILED_ATTEMPTS: 5,
+    MAX_FAILED_ATTEMPTS: parseInt(event.secrets.MAX_FAILED_ATTEMPTS) || 5,
 
     // Time window for velocity checks (milliseconds)
-    VELOCITY_WINDOW_MS: 300000, // 5 minutes
+    VELOCITY_WINDOW_MS: parseInt(event.secrets.VELOCITY_WINDOW_MS) || 300000,
+
+    // Token namespace for custom claims
+    TOKEN_NAMESPACE: event.secrets.TOKEN_NAMESPACE || 'https://yourapp.com/',
+
+    // Request timeout for external API calls (milliseconds)
+    REQUEST_TIMEOUT_MS: parseInt(event.secrets.REQUEST_TIMEOUT_MS) || 5000,
   };
 
   // ---------------------------------------------------------------------------
@@ -53,12 +59,17 @@ exports.onExecutePostLogin = async (event, api) => {
     let score = 0;
     const factors = [];
 
-    // [FACTOR 1] New device detection
+    // [FACTOR 1] New device detection using device fingerprint
     // First-time device usage is inherently riskier
     if (!event.authentication?.methods?.some(m => m.name === 'mfa')) {
-      const isNewDevice = event.user.app_metadata?.known_devices?.indexOf(
-        event.request.geoip?.ip
-      ) === -1;
+      // Generate simple device fingerprint from available data
+      const deviceFingerprint = [
+        event.request.user_agent?.substring(0, 50),
+        event.request.geoip?.ip?.split('.').slice(0, 2).join('.')
+      ].filter(Boolean).join('|');
+
+      const knownDevices = event.user.app_metadata?.known_devices || [];
+      const isNewDevice = !knownDevices.some(d => d === deviceFingerprint || d === event.request.ip);
 
       if (isNewDevice || !event.user.app_metadata?.known_devices) {
         score += 15;
@@ -168,17 +179,31 @@ exports.onExecutePostLogin = async (event, api) => {
   }
 
   /**
+   * Create an AbortController with timeout
+   * Used for external API calls to prevent hanging
+   */
+  function createTimeoutController(timeoutMs) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    return { controller, timeoutId };
+  }
+
+  /**
    * Send audit log entry to external logging service
    * Logs are critical for security monitoring and compliance
+   * Includes timeout handling and rate limit awareness
    */
-  async function sendAuditLog(logEntry) {
+  async function sendAuditLog(logEntry, retryCount = 0) {
     const endpoint = event.secrets.AUDIT_LOG_ENDPOINT;
     const apiKey = event.secrets.AUDIT_LOG_API_KEY;
+    const MAX_RETRIES = 2;
 
     if (!endpoint) {
       console.log('[AUDIT] No endpoint configured, logging to console:', JSON.stringify(logEntry));
       return;
     }
+
+    const { controller, timeoutId } = createTimeoutController(CONFIG.REQUEST_TIMEOUT_MS);
 
     try {
       const response = await fetch(endpoint, {
@@ -193,16 +218,40 @@ exports.onExecutePostLogin = async (event, api) => {
           timestamp: new Date().toISOString(),
           source: 'auth0_post_login_action',
           version: '1.0.0'
-        })
+        }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
+
+      // Handle rate limiting (429)
+      if (response.status === 429 && retryCount < MAX_RETRIES) {
+        const retryAfter = parseInt(response.headers.get('Retry-After')) || 1;
+        console.log(`[AUDIT] Rate limited, retrying after ${retryAfter}s (attempt ${retryCount + 1})`);
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        return sendAuditLog(logEntry, retryCount + 1);
+      }
+
+      // Handle server errors with retry
+      if (response.status >= 500 && retryCount < MAX_RETRIES) {
+        const backoffMs = Math.pow(2, retryCount) * 1000 + Math.random() * 500;
+        console.log(`[AUDIT] Server error ${response.status}, retrying in ${backoffMs}ms`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        return sendAuditLog(logEntry, retryCount + 1);
+      }
 
       if (!response.ok) {
         console.error('[AUDIT] Failed to send audit log:', response.status);
       }
     } catch (error) {
+      clearTimeout(timeoutId);
       // Log error but don't fail the authentication
       // Audit logging should never block legitimate logins
-      console.error('[AUDIT] Error sending audit log:', error.message);
+      if (error.name === 'AbortError') {
+        console.error('[AUDIT] Request timed out after', CONFIG.REQUEST_TIMEOUT_MS, 'ms');
+      } else {
+        console.error('[AUDIT] Error sending audit log:', error.message);
+      }
     }
   }
 
@@ -337,8 +386,8 @@ exports.onExecutePostLogin = async (event, api) => {
     }
 
     // Step 4: Add risk metadata to ID token for downstream consumption
-    api.idToken.setCustomClaim('https://yourapp.com/risk_score', riskAssessment.score);
-    api.idToken.setCustomClaim('https://yourapp.com/risk_factors', riskAssessment.factors.map(f => f.factor));
+    api.idToken.setCustomClaim(`${CONFIG.TOKEN_NAMESPACE}risk_score`, riskAssessment.score);
+    api.idToken.setCustomClaim(`${CONFIG.TOKEN_NAMESPACE}risk_factors`, riskAssessment.factors.map(f => f.factor));
 
     // Step 5: Update user metadata for future risk assessments
     // Store current login context for future anomaly detection

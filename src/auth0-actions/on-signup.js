@@ -23,17 +23,50 @@ exports.onExecutePostUserRegistration = async (event, api) => {
   // ---------------------------------------------------------------------------
   // CONFIGURATION
   // ---------------------------------------------------------------------------
+  /**
+   * Parse domain-org mappings from secrets
+   * Format: domain:org_id:org_name:tier,domain2:org_id2:org_name2:tier2
+   */
+  function parseDomainMappings(mappingString) {
+    if (!mappingString) return {};
+    const mappings = {};
+    mappingString.split(',').forEach(entry => {
+      const [domain, org_id, org_name, tier] = entry.trim().split(':');
+      if (domain && org_id) {
+        mappings[domain.toLowerCase()] = {
+          org_id,
+          org_name: org_name || org_id,
+          tier: tier || 'free'
+        };
+      }
+    });
+    return mappings;
+  }
+
   const CONFIG = {
     // Default organization for users without domain mapping
     DEFAULT_ORG_ID: event.secrets.DEFAULT_ORG_ID || 'org_default',
 
-    // Email domain to organization mapping
-    // In production, this would typically come from a database or external service
-    DOMAIN_ORG_MAPPING: {
-      'acme.com': { org_id: 'org_acme', org_name: 'Acme Corporation', tier: 'enterprise' },
-      'techstartup.io': { org_id: 'org_techstartup', org_name: 'Tech Startup Inc', tier: 'professional' },
-      'university.edu': { org_id: 'org_university', org_name: 'State University', tier: 'education' }
-    },
+    // Email domain to organization mapping from secrets (dynamic configuration)
+    // Format: domain:org_id:org_name:tier,domain2:org_id2:org_name2:tier2
+    // Falls back to hardcoded demo mappings if not configured
+    DOMAIN_ORG_MAPPING: Object.keys(parseDomainMappings(event.secrets.DOMAIN_ORG_MAPPINGS)).length > 0
+      ? parseDomainMappings(event.secrets.DOMAIN_ORG_MAPPINGS)
+      : {
+          'acme.com': { org_id: 'org_acme', org_name: 'Acme Corporation', tier: 'enterprise' },
+          'techstartup.io': { org_id: 'org_techstartup', org_name: 'Tech Startup Inc', tier: 'professional' },
+          'university.edu': { org_id: 'org_university', org_name: 'State University', tier: 'education' }
+        },
+
+    // External organization mapping service URL (for dynamic lookups)
+    ORG_MAPPING_SERVICE_URL: event.secrets.ORG_MAPPING_SERVICE_URL || null,
+    ORG_MAPPING_API_KEY: event.secrets.ORG_MAPPING_API_KEY || null,
+
+    // Request timeout for external API calls
+    REQUEST_TIMEOUT_MS: parseInt(event.secrets.REQUEST_TIMEOUT_MS) || 5000,
+
+    // Require email verification before full org assignment
+    REQUIRE_EMAIL_VERIFICATION: event.secrets.REQUIRE_EMAIL_VERIFICATION === 'true',
 
     // Default roles by organization tier
     DEFAULT_ROLES_BY_TIER: {
