@@ -102,28 +102,28 @@ This platform demonstrates a production-ready architecture pattern using Auth0 a
 <table>
 <tr>
 <td align="center" width="50%">
-<strong>Admin Dashboard</strong><br/>
-<em>Self-service user and role management</em>
+<strong>Dashboard</strong><br/>
+<img src="./docs/assets/01_dashboard.png" alt="Dashboard" />
 </td>
 <td align="center" width="50%">
-<strong>Compliance Reports</strong><br/>
-<em>Automated SOC 2/HIPAA/GDPR generation</em>
+<strong>Organizations</strong><br/>
+<img src="./docs/assets/02_organizations.png" alt="Organizations" />
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<strong>Audit Trail</strong><br/>
-<em>Immutable authentication event logs</em>
+<strong>Users</strong><br/>
+<img src="./docs/assets/03_users.png" alt="Users" />
 </td>
 <td align="center" width="50%">
-<strong>SSO Configuration</strong><br/>
-<em>SAML/OIDC wizard for enterprise customers</em>
+<strong>Compliance Reports</strong><br/>
+<img src="./docs/assets/05_compliance.png" alt="Compliance Reports" />
 </td>
 </tr>
 </table>
 
 > [!NOTE]
-> Screenshots available in [docs/assets/](./docs/assets/) after running the demo.
+> Full screenshot gallery available in [docs/assets/](./docs/assets/).
 
 ---
 
