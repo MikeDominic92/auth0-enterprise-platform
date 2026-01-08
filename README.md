@@ -807,13 +807,30 @@ MONITORING ARCHITECTURE
 
 ---
 
-## Contributing
+## Deployment
 
-See [CONTRIBUTING.md](./docs/CONTRIBUTING.md) for development guidelines.
+For production deployment instructions, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+
+For common issues and debugging, see [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md).
+
+## Health Check
+
+Verify the deployment is working:
+
+```bash
+# Check API health
+curl http://localhost:3000/api/health
+
+# Verify database connection
+npm run db:status
+
+# Test Auth0 connectivity
+npm run auth0:verify
+```
 
 ## License
 
-Proprietary - All rights reserved.
+This project is proprietary software created for demonstration purposes. The code patterns and architecture are designed to showcase Auth0 enterprise integration capabilities.
 
 ---
 
