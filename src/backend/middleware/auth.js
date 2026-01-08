@@ -13,8 +13,40 @@ const { auth, requiredScopes, claimCheck } = require('express-oauth2-jwt-bearer'
 // Configuration
 // -----------------------------------------------------------------------------
 
-const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || 'https://api.example.com';
+/**
+ * Validate required Auth0 configuration
+ * Fails fast if required environment variables are missing or invalid
+ */
+const validateConfig = () => {
+    const errors = [];
+
+    if (!process.env.AUTH0_AUDIENCE) {
+        errors.push('AUTH0_AUDIENCE environment variable is required');
+    } else if (process.env.AUTH0_AUDIENCE.includes('example.com')) {
+        errors.push('AUTH0_AUDIENCE contains placeholder value - set to your actual API identifier');
+    }
+
+    if (!process.env.AUTH0_DOMAIN) {
+        errors.push('AUTH0_DOMAIN environment variable is required');
+    } else if (process.env.AUTH0_DOMAIN.includes('example')) {
+        errors.push('AUTH0_DOMAIN contains placeholder value - set to your actual Auth0 domain');
+    }
+
+    if (errors.length > 0) {
+        const errorMessage = `[AUTH CONFIG ERROR] Invalid configuration:\n  - ${errors.join('\n  - ')}`;
+        console.error(errorMessage);
+        if (process.env.NODE_ENV === 'production') {
+            throw new Error(errorMessage);
+        }
+    }
+};
+
+// Validate on module load
+validateConfig();
+
+const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE;
 const AUTH0_ISSUER = process.env.AUTH0_ISSUER || `https://${process.env.AUTH0_DOMAIN}/`;
+const AUTH0_CLAIMS_NAMESPACE = process.env.AUTH0_CLAIMS_NAMESPACE || AUTH0_AUDIENCE;
 
 // -----------------------------------------------------------------------------
 // JWT Validation Middleware
@@ -177,16 +209,19 @@ const extractUser = (req, res, next) => {
 
     const payload = req.auth.payload;
 
-    // Extract standard user information
+    // Extract standard user information using claims namespace
+    const namespace = AUTH0_CLAIMS_NAMESPACE;
     req.user = {
         id: payload.sub,
-        email: payload.email || payload[`${AUTH0_AUDIENCE}/email`],
-        name: payload.name || payload[`${AUTH0_AUDIENCE}/name`],
+        sub: payload.sub,
+        email: payload.email || payload[`${namespace}/email`],
+        name: payload.name || payload[`${namespace}/name`],
         picture: payload.picture,
-        roles: payload[`${AUTH0_AUDIENCE}/roles`] || [],
+        roles: payload[`${namespace}/roles`] || [],
         permissions: payload.permissions || [],
+        org_id: payload.org_id,
         orgId: payload.org_id,
-        metadata: payload[`${AUTH0_AUDIENCE}/metadata`] || {},
+        metadata: payload[`${namespace}/metadata`] || {},
     };
 
     next();

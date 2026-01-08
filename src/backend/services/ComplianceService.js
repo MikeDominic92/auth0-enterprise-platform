@@ -1019,6 +1019,404 @@ class ComplianceService {
         }));
     }
 
+    // -------------------------------------------------------------------------
+    // Framework Control Methods (Route Compatibility)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get control requirements for a compliance framework
+     *
+     * @param {string} framework - Framework identifier (soc2, hipaa, gdpr, iso27001)
+     * @returns {Array|null} Array of control definitions or null if framework not found
+     */
+    getFrameworkControls(framework) {
+        const frameworkControls = {
+            soc2: [
+                {
+                    id: 'CC1.1',
+                    category: 'Security',
+                    title: 'Control Environment',
+                    description: 'The entity demonstrates a commitment to integrity and ethical values.',
+                    requirements: ['Code of conduct', 'Ethics training', 'Background checks'],
+                    auditActions: ['user.create', 'user.update', 'auth.login.success'],
+                },
+                {
+                    id: 'CC2.1',
+                    category: 'Security',
+                    title: 'Communication and Information',
+                    description: 'The entity obtains or generates relevant information.',
+                    requirements: ['Security policies', 'Incident reporting', 'Communication channels'],
+                    auditActions: ['compliance.report.generate', 'system.config.change'],
+                },
+                {
+                    id: 'CC3.1',
+                    category: 'Security',
+                    title: 'Risk Assessment',
+                    description: 'The entity specifies objectives with sufficient clarity.',
+                    requirements: ['Risk assessments', 'Vulnerability scanning', 'Threat modeling'],
+                    auditActions: ['system.security.alert', 'access.permission.denied'],
+                },
+                {
+                    id: 'CC5.1',
+                    category: 'Security',
+                    title: 'Control Activities',
+                    description: 'The entity selects and develops control activities.',
+                    requirements: ['Access controls', 'Change management', 'Segregation of duties'],
+                    auditActions: ['user.role.assign', 'user.role.remove', 'access.permission.granted'],
+                },
+                {
+                    id: 'CC6.1',
+                    category: 'Security',
+                    title: 'Logical Access Security',
+                    description: 'The entity implements logical access security measures.',
+                    requirements: ['Authentication', 'Authorization', 'Access reviews'],
+                    auditActions: ['auth.login.success', 'auth.login.failure', 'auth.mfa.success'],
+                },
+                {
+                    id: 'CC7.1',
+                    category: 'Security',
+                    title: 'System Operations',
+                    description: 'The entity detects, prevents, and recovers from incidents.',
+                    requirements: ['Monitoring', 'Incident response', 'Recovery procedures'],
+                    auditActions: ['system.error', 'system.security.alert'],
+                },
+            ],
+            hipaa: [
+                {
+                    id: 'HIPAA-164.312(a)(1)',
+                    category: 'Technical Safeguards',
+                    title: 'Access Control',
+                    description: 'Implement technical policies for electronic PHI access.',
+                    requirements: ['Unique user identification', 'Emergency access', 'Automatic logoff', 'Encryption'],
+                    auditActions: ['auth.login.success', 'auth.session.expired', 'user.create'],
+                },
+                {
+                    id: 'HIPAA-164.312(b)',
+                    category: 'Technical Safeguards',
+                    title: 'Audit Controls',
+                    description: 'Implement mechanisms to record and examine access.',
+                    requirements: ['Audit logs', 'Log review', 'Retention policy'],
+                    auditActions: ['access.resource', 'access.api', 'compliance.report.download'],
+                },
+                {
+                    id: 'HIPAA-164.312(c)(1)',
+                    category: 'Technical Safeguards',
+                    title: 'Integrity Controls',
+                    description: 'Implement policies to protect ePHI from alteration.',
+                    requirements: ['Data validation', 'Error correction', 'Integrity verification'],
+                    auditActions: ['user.update', 'system.config.change'],
+                },
+                {
+                    id: 'HIPAA-164.312(d)',
+                    category: 'Technical Safeguards',
+                    title: 'Person Authentication',
+                    description: 'Implement procedures to verify identity.',
+                    requirements: ['MFA', 'Strong passwords', 'Biometrics'],
+                    auditActions: ['auth.mfa.success', 'auth.mfa.failure', 'auth.password.change'],
+                },
+            ],
+            gdpr: [
+                {
+                    id: 'GDPR-Art5',
+                    category: 'Data Principles',
+                    title: 'Principles of Processing',
+                    description: 'Lawfulness, fairness, transparency, purpose limitation.',
+                    requirements: ['Consent management', 'Processing records', 'Transparency notices'],
+                    auditActions: ['compliance.consent.update', 'user.create'],
+                },
+                {
+                    id: 'GDPR-Art15',
+                    category: 'Data Subject Rights',
+                    title: 'Right of Access',
+                    description: 'Data subjects have right to access their data.',
+                    requirements: ['Data export', 'Access requests', 'Response tracking'],
+                    auditActions: ['compliance.data.export'],
+                },
+                {
+                    id: 'GDPR-Art17',
+                    category: 'Data Subject Rights',
+                    title: 'Right to Erasure',
+                    description: 'Right to have personal data erased.',
+                    requirements: ['Deletion procedures', 'Retention policies', 'Third-party notification'],
+                    auditActions: ['user.delete'],
+                },
+                {
+                    id: 'GDPR-Art32',
+                    category: 'Security',
+                    title: 'Security of Processing',
+                    description: 'Implement appropriate security measures.',
+                    requirements: ['Encryption', 'Access control', 'Regular testing'],
+                    auditActions: ['auth.login.success', 'auth.mfa.success', 'system.security.alert'],
+                },
+                {
+                    id: 'GDPR-Art33',
+                    category: 'Breach Notification',
+                    title: 'Breach Notification to Authority',
+                    description: 'Notify supervisory authority within 72 hours.',
+                    requirements: ['Breach detection', 'Notification procedures', 'Documentation'],
+                    auditActions: ['system.security.alert', 'system.error'],
+                },
+            ],
+            iso27001: [
+                {
+                    id: 'ISO-A.9.1',
+                    category: 'Access Control',
+                    title: 'Business Requirements of Access Control',
+                    description: 'Access control policy based on business requirements.',
+                    requirements: ['Access policy', 'Network access', 'Application access'],
+                    auditActions: ['access.permission.granted', 'access.permission.denied'],
+                },
+                {
+                    id: 'ISO-A.9.2',
+                    category: 'Access Control',
+                    title: 'User Access Management',
+                    description: 'Ensure authorized user access and prevent unauthorized access.',
+                    requirements: ['User registration', 'Access provisioning', 'Privileged access'],
+                    auditActions: ['user.create', 'user.delete', 'user.role.assign'],
+                },
+                {
+                    id: 'ISO-A.9.4',
+                    category: 'Access Control',
+                    title: 'System and Application Access Control',
+                    description: 'Prevent unauthorized access to systems and applications.',
+                    requirements: ['Secure logon', 'Password management', 'Access restriction'],
+                    auditActions: ['auth.login.success', 'auth.login.failure', 'auth.password.change'],
+                },
+                {
+                    id: 'ISO-A.12.4',
+                    category: 'Operations Security',
+                    title: 'Logging and Monitoring',
+                    description: 'Record events and generate evidence.',
+                    requirements: ['Event logging', 'Log protection', 'Administrator logs'],
+                    auditActions: ['system.config.change', 'user.role.assign'],
+                },
+            ],
+        };
+
+        return frameworkControls[framework] || null;
+    }
+
+    /**
+     * Get action mapping for a specific control
+     *
+     * @param {string} controlId - Control identifier
+     * @returns {Object|null} Control action mapping or null if not found
+     */
+    getControlActionMapping(controlId) {
+        // Build a lookup from all frameworks
+        const allControls = [
+            ...(this.getFrameworkControls('soc2') || []),
+            ...(this.getFrameworkControls('hipaa') || []),
+            ...(this.getFrameworkControls('gdpr') || []),
+            ...(this.getFrameworkControls('iso27001') || []),
+        ];
+
+        const control = allControls.find(c => c.id === controlId);
+
+        if (!control) {
+            return null;
+        }
+
+        return {
+            controlId: control.id,
+            title: control.title,
+            actions: control.auditActions,
+            category: control.category,
+        };
+    }
+
+    /**
+     * Calculate audit readiness score for an organization
+     *
+     * @param {string} organizationId - Organization ID
+     * @param {string} framework - Compliance framework
+     * @returns {Promise<Object>} Audit readiness assessment
+     */
+    async calculateAuditReadiness(organizationId, framework = 'soc2') {
+        try {
+            const controls = this.getFrameworkControls(framework);
+
+            if (!controls) {
+                const error = new Error(`Unknown framework: ${framework}`);
+                error.statusCode = 400;
+                throw error;
+            }
+
+            // Get audit logs for the past 90 days
+            const endDate = new Date();
+            const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+            const auditEvents = await this._queryAuditLogs({
+                startDate,
+                endDate,
+            });
+
+            // Evaluate each control
+            const controlResults = [];
+            let totalScore = 0;
+
+            for (const control of controls) {
+                const result = this._evaluateControlReadiness(control, auditEvents);
+                controlResults.push(result);
+                totalScore += result.score;
+            }
+
+            const overallScore = controls.length > 0
+                ? Math.round(totalScore / controls.length)
+                : 0;
+
+            // Generate recommendations
+            const recommendations = this._generateAuditRecommendations(controlResults);
+
+            // Identify gaps
+            const gaps = controlResults
+                .filter(r => r.status === 'gap' || r.status === 'partial')
+                .map(r => ({
+                    controlId: r.controlId,
+                    title: r.title,
+                    status: r.status,
+                    recommendation: r.recommendation,
+                }));
+
+            return {
+                framework,
+                organizationId,
+                assessmentDate: new Date().toISOString(),
+                overallScore,
+                readinessLevel: this._getReadinessLevel(overallScore),
+                controlCount: controls.length,
+                passedControls: controlResults.filter(r => r.status === 'passed').length,
+                partialControls: controlResults.filter(r => r.status === 'partial').length,
+                gapControls: controlResults.filter(r => r.status === 'gap').length,
+                controlResults,
+                gaps,
+                recommendations,
+                evidenceCoverage: {
+                    period: { start: startDate.toISOString(), end: endDate.toISOString() },
+                    totalEvents: auditEvents.length,
+                    eventTypes: [...new Set(auditEvents.map(e => e.eventType))].length,
+                },
+            };
+        } catch (error) {
+            console.error('[ERROR] ComplianceService.calculateAuditReadiness:', error.message);
+            throw this._handleError(error, 'Failed to calculate audit readiness');
+        }
+    }
+
+    /**
+     * Evaluate a single control against audit evidence
+     * @private
+     */
+    _evaluateControlReadiness(control, auditEvents) {
+        const relevantEvents = auditEvents.filter(e =>
+            control.auditActions.includes(e.eventType)
+        );
+
+        const eventCount = relevantEvents.length;
+        let status = 'gap';
+        let score = 0;
+
+        // Scoring logic based on evidence presence
+        if (eventCount >= 10) {
+            status = 'passed';
+            score = 100;
+        } else if (eventCount >= 5) {
+            status = 'partial';
+            score = 70;
+        } else if (eventCount >= 1) {
+            status = 'partial';
+            score = 40;
+        } else {
+            status = 'gap';
+            score = 0;
+        }
+
+        return {
+            controlId: control.id,
+            category: control.category,
+            title: control.title,
+            description: control.description,
+            requirements: control.requirements,
+            status,
+            score,
+            evidenceCount: eventCount,
+            lastEvidence: relevantEvents.length > 0
+                ? relevantEvents[0].timestamp
+                : null,
+            recommendation: status === 'gap'
+                ? `Implement controls to generate evidence for ${control.title}`
+                : status === 'partial'
+                    ? `Increase activity coverage for ${control.title}`
+                    : null,
+        };
+    }
+
+    /**
+     * Get readiness level from score
+     * @private
+     */
+    _getReadinessLevel(score) {
+        if (score >= 90) return 'audit-ready';
+        if (score >= 70) return 'nearly-ready';
+        if (score >= 50) return 'in-progress';
+        if (score >= 25) return 'early-stage';
+        return 'not-started';
+    }
+
+    /**
+     * Generate audit readiness recommendations
+     * @private
+     */
+    _generateAuditRecommendations(controlResults) {
+        const recommendations = [];
+
+        const gaps = controlResults.filter(r => r.status === 'gap');
+        const partial = controlResults.filter(r => r.status === 'partial');
+
+        if (gaps.length > 0) {
+            recommendations.push({
+                priority: 'high',
+                category: 'Evidence Gaps',
+                recommendation: `Address ${gaps.length} control gap(s) with no audit evidence`,
+                affectedControls: gaps.map(g => g.controlId),
+            });
+        }
+
+        if (partial.length > 0) {
+            recommendations.push({
+                priority: 'medium',
+                category: 'Evidence Coverage',
+                recommendation: `Improve evidence coverage for ${partial.length} partially compliant control(s)`,
+                affectedControls: partial.map(p => p.controlId),
+            });
+        }
+
+        // Category-specific recommendations
+        const categoryScores = {};
+        for (const result of controlResults) {
+            if (!categoryScores[result.category]) {
+                categoryScores[result.category] = { total: 0, count: 0 };
+            }
+            categoryScores[result.category].total += result.score;
+            categoryScores[result.category].count++;
+        }
+
+        for (const [category, data] of Object.entries(categoryScores)) {
+            const avgScore = data.total / data.count;
+            if (avgScore < 70) {
+                recommendations.push({
+                    priority: avgScore < 50 ? 'high' : 'medium',
+                    category,
+                    recommendation: `Focus on improving ${category} controls (current score: ${Math.round(avgScore)}%)`,
+                });
+            }
+        }
+
+        return recommendations.sort((a, b) =>
+            a.priority === 'high' ? -1 : b.priority === 'high' ? 1 : 0
+        );
+    }
+
     /**
      * Flatten data for CSV export
      * @private

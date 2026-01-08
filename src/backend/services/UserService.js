@@ -516,6 +516,355 @@ class UserService {
     }
 
     // -------------------------------------------------------------------------
+    // Single Role Management (Route Compatibility)
+    // -------------------------------------------------------------------------
+
+    /**
+     * List all users with filtering and pagination
+     * Wrapper for getUsers with route-compatible interface
+     *
+     * @param {Object} options - Query options
+     * @param {number} [options.page=1] - Page number (1-indexed)
+     * @param {number} [options.limit=20] - Results per page
+     * @param {string} [options.search] - Search query
+     * @param {string} [options.role] - Filter by role
+     * @param {string} [options.status] - Filter by status
+     * @param {string} [options.organizationId] - Filter by organization
+     * @returns {Promise<Object>} Paginated user list
+     */
+    async listUsers(options = {}) {
+        try {
+            const {
+                page = 1,
+                limit = 20,
+                search,
+                role,
+                status,
+                organizationId,
+            } = options;
+
+            // Build Auth0 search query
+            const queryParts = [];
+
+            if (search) {
+                queryParts.push(`(email:*${search}* OR name:*${search}*)`);
+            }
+
+            if (status === 'blocked') {
+                queryParts.push('blocked:true');
+            } else if (status === 'active') {
+                queryParts.push('blocked:false');
+            }
+
+            if (organizationId) {
+                queryParts.push(`app_metadata.organization_id:"${organizationId}"`);
+            }
+
+            const searchQuery = queryParts.length > 0 ? queryParts.join(' AND ') : undefined;
+
+            // Get users from Auth0
+            const auth0Users = await auth0.getUsers({
+                page: page - 1, // Auth0 uses 0-indexed pages
+                perPage: limit,
+                search: searchQuery,
+            });
+
+            // Transform Auth0 users to our User model format
+            let users = auth0Users.users.map(u => new User({
+                auth0Id: u.user_id,
+                email: u.email,
+                name: u.name,
+                nickname: u.nickname,
+                picture: u.picture,
+                status: u.blocked ? 'blocked' : 'active',
+                emailVerified: u.email_verified,
+                lastLogin: u.last_login,
+                loginCount: u.logins_count,
+                metadata: u.user_metadata || {},
+                appMetadata: u.app_metadata || {},
+                createdAt: u.created_at,
+                updatedAt: u.updated_at,
+            }));
+
+            // Filter by role if specified (requires additional API calls)
+            if (role) {
+                const usersWithRole = [];
+                for (const user of users) {
+                    const userRoles = await auth0.getUserRoles(user.auth0Id);
+                    if (userRoles.some(r => r.id === role || r.name === role)) {
+                        user.roles = userRoles;
+                        usersWithRole.push(user);
+                    }
+                }
+                users = usersWithRole;
+            }
+
+            return {
+                users,
+                page,
+                limit,
+                total: auth0Users.total,
+            };
+        } catch (error) {
+            console.error('[ERROR] UserService.listUsers:', error.message);
+            throw this._handleError(error, 'Failed to list users');
+        }
+    }
+
+    /**
+     * Remove a single role from user
+     *
+     * @param {string} userId - Auth0 user ID
+     * @param {string} roleId - Role ID to remove
+     * @param {Object} context - Request context
+     * @returns {Promise<Array>} Updated roles
+     */
+    async removeRole(userId, roleId, context = {}) {
+        try {
+            const user = await this.getUserById(userId);
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            // Get current roles for audit
+            const currentRoles = await auth0.getUserRoles(userId);
+
+            // Remove the single role
+            await auth0.removeRolesFromUser(userId, [roleId]);
+
+            // Get updated roles
+            const updatedRoles = await auth0.getUserRoles(userId);
+
+            // Log audit event
+            await this._logAuditEvent(
+                AUDIT_EVENT_TYPES.USER.ROLE_REMOVE,
+                user,
+                context,
+                `Removed role ${roleId} from user: ${user.email}`,
+                { before: currentRoles, after: updatedRoles }
+            );
+
+            return updatedRoles;
+        } catch (error) {
+            console.error('[ERROR] UserService.removeRole:', error.message);
+            throw this._handleError(error, 'Failed to remove role');
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // MFA Operations
+    // -------------------------------------------------------------------------
+
+    /**
+     * Reset user MFA enrollment
+     *
+     * @param {string} userId - Auth0 user ID
+     * @param {Object} context - Request context
+     * @returns {Promise<boolean>}
+     */
+    async resetMFA(userId, context = {}) {
+        try {
+            const user = await this.getUserById(userId);
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            const client = auth0.getManagementClient();
+
+            // Get all MFA enrollments for the user
+            let enrollments = [];
+            try {
+                const response = await client.users.getEnrollments({ id: userId });
+                enrollments = response.data || [];
+            } catch (err) {
+                // If no enrollments exist, continue
+                if (err.statusCode !== 404) {
+                    throw err;
+                }
+            }
+
+            // Delete each MFA enrollment
+            for (const enrollment of enrollments) {
+                try {
+                    await client.users.deleteMultifactorProvider({
+                        id: userId,
+                        provider: enrollment.type || enrollment.authenticator_type,
+                    });
+                } catch (err) {
+                    console.warn('[WARN] Failed to delete MFA enrollment:', err.message);
+                }
+            }
+
+            // Update app_metadata to track MFA reset
+            await auth0.updateUser(userId, {
+                app_metadata: {
+                    ...user.appMetadata,
+                    mfaResetAt: new Date().toISOString(),
+                    mfaResetBy: context.resetBy,
+                },
+            });
+
+            // Log audit event
+            await this._logAuditEvent(
+                AUDIT_EVENT_TYPES.AUTH?.MFA_RESET || 'auth.mfa_reset',
+                user,
+                context,
+                `MFA reset for user: ${user.email}`,
+                null,
+                SEVERITY_LEVELS.WARNING
+            );
+
+            return true;
+        } catch (error) {
+            console.error('[ERROR] UserService.resetMFA:', error.message);
+            throw this._handleError(error, 'Failed to reset MFA');
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Password Operations
+    // -------------------------------------------------------------------------
+
+    /**
+     * Send password reset email
+     *
+     * @param {string} userId - Auth0 user ID
+     * @param {Object} context - Request context
+     * @returns {Promise<boolean>}
+     */
+    async sendPasswordReset(userId, context = {}) {
+        try {
+            const user = await this.getUserById(userId);
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            const authClient = auth0.getAuthenticationClient();
+
+            // Request password reset
+            await authClient.database.changePassword({
+                email: user.email,
+                connection: 'Username-Password-Authentication',
+            });
+
+            // Log audit event
+            await this._logAuditEvent(
+                AUDIT_EVENT_TYPES.AUTH?.PASSWORD_RESET_REQUEST || 'auth.password_reset_request',
+                user,
+                context,
+                `Password reset requested for user: ${user.email}`,
+                null,
+                SEVERITY_LEVELS.NOTICE || SEVERITY_LEVELS.INFO
+            );
+
+            return true;
+        } catch (error) {
+            console.error('[ERROR] UserService.sendPasswordReset:', error.message);
+            throw this._handleError(error, 'Failed to send password reset');
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Session Management
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get active sessions for a user
+     *
+     * @param {string} userId - Auth0 user ID
+     * @returns {Promise<Array>} Active sessions
+     */
+    async getActiveSessions(userId) {
+        try {
+            const user = await this.getUserById(userId);
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            const client = auth0.getManagementClient();
+
+            // Get user sessions (refresh tokens act as sessions in Auth0)
+            let sessions = [];
+            try {
+                const response = await client.users.getRefreshTokens({ id: userId });
+                sessions = response.data || [];
+            } catch (err) {
+                // If no sessions exist, return empty array
+                if (err.statusCode !== 404) {
+                    throw err;
+                }
+            }
+
+            return sessions.map(session => ({
+                id: session.id,
+                clientId: session.client_id,
+                clientName: session.client?.name,
+                createdAt: session.created_at,
+                expiresAt: session.expires_at,
+                lastUsedAt: session.last_used_at,
+                userAgent: session.device?.name,
+                ip: session.device?.last_ip,
+            }));
+        } catch (error) {
+            console.error('[ERROR] UserService.getActiveSessions:', error.message);
+            throw this._handleError(error, 'Failed to get active sessions');
+        }
+    }
+
+    /**
+     * Revoke all sessions for a user
+     *
+     * @param {string} userId - Auth0 user ID
+     * @param {Object} context - Request context
+     * @returns {Promise<boolean>}
+     */
+    async revokeAllSessions(userId, context = {}) {
+        try {
+            const user = await this.getUserById(userId);
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            const client = auth0.getManagementClient();
+
+            // Revoke all refresh tokens (effectively ending all sessions)
+            try {
+                await client.users.deleteRefreshTokens({ id: userId });
+            } catch (err) {
+                // If no tokens exist, continue
+                if (err.statusCode !== 404) {
+                    throw err;
+                }
+            }
+
+            // Log audit event
+            await this._logAuditEvent(
+                AUDIT_EVENT_TYPES.AUTH?.SESSION_REVOKE || 'auth.session_revoke',
+                user,
+                context,
+                `All sessions revoked for user: ${user.email}`,
+                null,
+                SEVERITY_LEVELS.WARNING
+            );
+
+            return true;
+        } catch (error) {
+            console.error('[ERROR] UserService.revokeAllSessions:', error.message);
+            throw this._handleError(error, 'Failed to revoke sessions');
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Bulk Operations
     // -------------------------------------------------------------------------
 
